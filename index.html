@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StoreCash Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<div class="container">
+    <!-- DASHBOARD -->
+    <div id="dashboardPage" class="page active">
+        <header style="margin-bottom: 20px;">
+            <h1 style="font-size: 1.6rem; color: var(--primary);">K-Store</h1>
+            <div style="display: flex; gap:10px; margin-top:15px;">
+                <select id="storeSelect"></select>
+                <input type="date" id="datePicker">
+            </div>
+        </header>
+
+        <div class="stat-grid">
+            <div class="stat-box" style="background:var(--primary)">
+                <small>Today Net</small><h2 id="todayNet">₹0.00</h2>
+            </div>
+            <div class="stat-box" style="background:#1e293b">
+                <small>Month Net</small><h2 id="monthNet">₹0.00</h2>
+            </div>
+        </div>
+
+        <div class="card">
+            <input type="number" id="amount" placeholder="0.00" inputmode="decimal">
+            <input type="text" id="description" placeholder="Note (e.g. Sales, Rent)">
+            <div style="display:flex; gap:10px;">
+                <button class="btn income-btn" onclick="addTransaction('income')">+ Income</button>
+                <button class="btn expense-btn" onclick="addTransaction('expense')">- Expense</button>
+            </div>
+        </div>
+
+        <!-- Advanced Filter & Search -->
+        <div class="card" style="padding: 10px; display: flex; gap: 8px; align-items: center; background: #f1f5f9;">
+            <i class="fas fa-search" style="color: var(--text-light); margin-left: 10px;"></i>
+            <input type="text" id="searchInput" placeholder="Search notes..." 
+                   style="margin-bottom: 0; border: none; background: transparent; padding: 8px;"
+                   onkeyup="filterTransactions()">
+            <select id="filterType" onchange="filterTransactions()" style="margin-bottom: 0; width: 110px; padding: 5px;">
+                <option value="all">All</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+            </select>
+        </div>
+        
+        <div id="transactionList"></div>
+    </div>
+
+    <!-- STORES -->
+    <div id="storesPage" class="page">
+        <h1>Stores</h1>
+        <div class="card">
+            <h3>Add New Store</h3><br>
+            <input type="text" id="storeNameInput" placeholder="Branch Name">
+            <button class="btn primary-btn" onclick="addNewStore()">Create</button>
+        </div>
+        <div id="storeListContainer"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="settingsPage" class="page">
+        <h1>Settings</h1>
+        <div class="card">
+            <h3>Bulk Delete Range</h3>
+            <select id="bulkStoreSelect"></select>
+            <div style="display: flex; gap: 10px;">
+                <input type="date" id="deleteFrom">
+                <input type="date" id="deleteTo">
+            </div>
+            <button class="btn expense-btn" style="width:100%" onclick="bulkDelete()">Delete Range</button>
+        </div>
+        <div class="card" style="background: #f0fdf4; border: 1px solid #dcfce7;">
+            <h3>Backup Data</h3>
+            <p style="font-size: 12px; margin: 8px 0;">Export your transaction history.</p>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn" style="background: #166534;" onclick="downloadBackup('json')">JSON</button>
+                <button class="btn" style="background: #1e293b;" onclick="downloadBackup('csv')">CSV (Excel)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABOUT -->
+    <div id="aboutPage" class="page">
+        <div class="card" style="text-align: center; margin-top: 30px;">
+            <h2>About System</h2>
+            <p style="color:var(--text-light); margin: 10px 0;">Powered By EnMate</p>
+            <div style="display: flex; gap: 20px; justify-content: center; margin-top: 20px;">
+                <a href="https://wa.me/YOUR_PHONE" style="color:#25D366; font-size: 24px;"><i class="fab fa-whatsapp"></i></a>
+                <a href="https://instagram.com/enmate" style="color:#E1306C; font-size: 24px;"><i class="fab fa-instagram"></i></a>
+                <a href="tel:YOUR_PHONE" style="color:#3b82f6; font-size: 24px;"><i class="fas fa-phone"></i></a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<nav class="navbar">
+    <button class="nav-item active" onclick="navigateTo('dashboardPage')"><i class="fas fa-chart-pie"></i>Dashboard</button>
+    <button class="nav-item" onclick="navigateTo('storesPage')"><i class="fas fa-store"></i>Stores</button>
+    <button class="nav-item" onclick="navigateTo('settingsPage')"><i class="fas fa-cog"></i>Settings</button>
+    <button class="nav-item" onclick="navigateTo('aboutPage')"><i class="fas fa-info-circle"></i>About</button>
+</nav>
+
+<script src="config.js"></script>
+<script>
+    let currentStoreId = null;
+    let selectedDate = new Date().toISOString().split('T')[0];
+    let currentTransactions = [];
+
+    // Format: DD/MM/YYYY HH:mm
+    function formatFullDate(isoStr) {
+        const d = new Date(isoStr);
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+
+    function navigateTo(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        event.currentTarget.classList.add('active');
+        if (pageId === 'storesPage') renderStoresList();
+        if (pageId === 'settingsPage') fetchStoresDropdown('bulkStoreSelect');
+    }
+
+    async function fetchStoresDropdown(targetId) {
+        const { data } = await supabaseClient.from('stores').select('*').order('name');
+        const select = document.getElementById(targetId);
+        select.innerHTML = data.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        if (targetId === 'storeSelect' && data.length > 0 && !currentStoreId) {
+            currentStoreId = data[0].id;
+            refreshUI();
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('datePicker').value = selectedDate;
+        fetchStoresDropdown('storeSelect');
+    });
+
+    document.getElementById('datePicker').onchange = (e) => { selectedDate = e.target.value; refreshUI(); };
+    document.getElementById('storeSelect').onchange = (e) => { currentStoreId = e.target.value; refreshUI(); };
+
+    async function refreshUI() {
+        if (!currentStoreId) return;
+        const dObj = new Date(selectedDate);
+        const first = new Date(dObj.getFullYear(), dObj.getMonth(), 1).toISOString().split('T')[0];
+        const last = new Date(dObj.getFullYear(), dObj.getMonth() + 1, 0).toISOString().split('T')[0];
+
+        const { data, error } = await supabaseClient.from('transactions').select('*')
+            .eq('store_id', currentStoreId).gte('date', first).lte('date', last).order('created_at', { ascending: false });
+
+        if (error) return console.error(error);
+        currentTransactions = data || [];
+        filterTransactions();
+    }
+
+    function filterTransactions() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const typeFilter = document.getElementById('filterType').value;
+        const container = document.getElementById('transactionList');
+        let daily = 0, monthly = 0;
+        container.innerHTML = '';
+
+        currentTransactions.forEach(item => {
+            const val = item.type === 'income' ? item.amount : -item.amount;
+            monthly += val;
+            if (item.date === selectedDate) {
+                daily += val;
+                if (item.description.toLowerCase().includes(search) && (typeFilter === 'all' || item.type === typeFilter)) {
+                    const div = document.createElement('div');
+                    div.className = 'card';
+                    div.style.padding = '12px';
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.innerHTML = `
+                        <div><strong>${item.description}</strong><span class="meta-date">${formatFullDate(item.created_at)}</span></div>
+                        <div style="color:${item.type==='income'?'var(--success)':'var(--danger)'};font-weight:700;">
+                            ${item.type==='income'?'+':'-'}₹${item.amount.toFixed(2)}
+                        </div>`;
+                    container.appendChild(div);
+                }
+            }
+        });
+        document.getElementById('todayNet').textContent = `₹${daily.toFixed(2)}`;
+        document.getElementById('monthNet').textContent = `₹${monthly.toFixed(2)}`;
+    }
+
+    async function addTransaction(type) {
+        const amt = document.getElementById('amount');
+        const desc = document.getElementById('description');
+        if (!currentStoreId || !amt.value) return alert("Enter amount");
+        await supabaseClient.from('transactions').insert([{
+            store_id: currentStoreId, amount: parseFloat(amt.value), type,
+            description: desc.value || type, date: selectedDate, created_at: new Date().toISOString()
+        }]);
+        amt.value = ''; desc.value = ''; refreshUI();
+    }
+
+    async function addNewStore() {
+        const input = document.getElementById('storeNameInput');
+        if (!input.value) return;
+        await supabaseClient.from('stores').insert([{ name: input.value }]);
+        input.value = ''; renderStoresList(); fetchStoresDropdown('storeSelect');
+    }
+
+    async function editStore(id, oldName) {
+        const newName = prompt("Edit Store Name:", oldName);
+        if (newName && newName !== oldName) {
+            await supabaseClient.from('stores').update({ name: newName }).eq('id', id);
+            renderStoresList(); fetchStoresDropdown('storeSelect');
+        }
+    }
+
+    async function deleteStore(id) {
+        if (confirm("Delete store? History will remain in database but store will be hidden.")) {
+            await supabaseClient.from('stores').delete().eq('id', id);
+            renderStoresList(); fetchStoresDropdown('storeSelect');
+        }
+    }
+
+    async function renderStoresList() {
+        const { data } = await supabaseClient.from('stores').select('*').order('name');
+        document.getElementById('storeListContainer').innerHTML = data.map(s => `
+            <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px 15px;">
+                <span><strong>${s.name}</strong></span>
+                <div class="action-btns">
+                    <button class="icon-btn edit" onclick="editStore('${s.id}', '${s.name}')"><i class="fas fa-edit"></i></button>
+                    <button class="icon-btn delete" onclick="deleteStore('${s.id}')"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>`).join('');
+    }
+
+    async function bulkDelete() {
+        const sid = document.getElementById('bulkStoreSelect').value;
+        const from = document.getElementById('deleteFrom').value;
+        const to = document.getElementById('deleteTo').value;
+        if (confirm("Delete all transactions in this range?")) {
+            await supabaseClient.from('transactions').delete().eq('store_id', sid).gte('date', from).lte('date', to);
+            refreshUI();
+        }
+    }
+
+    async function downloadBackup(format) {
+        const { data, error } = await supabaseClient.from('transactions').select('*, stores(name)');
+        if (error) return alert("Error fetching data");
+
+        let blob;
+        let filename = `StoreCash_Backup_${new Date().toISOString().split('T')[0]}`;
+
+        if (format === 'json') {
+            blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            filename += ".json";
+        } else if (format === 'csv') {
+            const headers = ["ID", "Store Name", "Amount", "Type", "Description", "Date", "Created At"];
+            const rows = data.map(item => [
+                item.id,
+                item.stores?.name || "N/A",
+                item.amount,
+                item.type,
+                item.description,
+                item.date,
+                item.created_at
+            ]);
+            const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+            blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            filename += ".csv";
+        }
+
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+    }
+</script>
+</body>
+</html>
