@@ -29,8 +29,8 @@
             </div>
         </div>
 
-        <button class="btn" style="background: #25D366; width: 100%; margin-bottom: 15px; color: white; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="copyDailyReport()">
-            <i class="fab fa-whatsapp" style="font-size: 1.2rem;"></i> Copy Today's Report
+        <button class="btn" style="background: #25D366; width: 100%; margin-bottom: 15px; color: white; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="shareDailyReport()">
+            <i class="fas fa-share-nodes" style="font-size: 1.2rem;"></i> Share Today's Report
         </button>
 
         <div class="card">
@@ -235,20 +235,24 @@
     }
 
     // Professional WhatsApp Share/Copy
-    function copyDailyReport() {
+    async function shareDailyReport() {
         if (!currentStoreId) return alert("Please select a store");
+        
         const storeName = document.getElementById('storeSelect').options[document.getElementById('storeSelect').selectedIndex].text;
         const todayNet = document.getElementById('todayNet').textContent;
+        const dateStr = new Date(selectedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         
+        // 1. Build the professional text message
         let report = `*📊 Daily Report: ${storeName}*\n`;
-        report += `*Date:* ${new Date(selectedDate).toLocaleDateString('en-IN')}\n`;
+        report += `*Date:* ${dateStr}\n`;
         report += `--------------------------\n`;
 
         const todayItems = currentTransactions.filter(item => item.date === selectedDate);
         if(todayItems.length === 0) {
             report += `No transactions recorded.\n`;
         } else {
-            todayItems.forEach(item => {
+            // We reverse it to show newest at the bottom for better reading in chat
+            [...todayItems].reverse().forEach(item => {
                 const icon = item.type === 'income' ? '➕' : '➖';
                 report += `${icon} ₹${item.amount.toFixed(2)} - ${item.description}\n`;
             });
@@ -257,9 +261,22 @@
         report += `*Total Net Today: ${todayNet}*\n`;
         report += `_Generated via StoreCash Pro_`;
 
-        navigator.clipboard.writeText(report).then(() => {
-            alert("✅ Report copied! Now paste it on WhatsApp.");
-        });
+        // 2. Try to use Native Share (Mobile WhatsApp/System Share)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Report - ${storeName}`,
+                    text: report
+                });
+            } catch (err) {
+                console.log("Share cancelled or failed");
+            }
+        } else {
+            // 3. Fallback: Copy to Clipboard (for Desktop/Old Browsers)
+            navigator.clipboard.writeText(report).then(() => {
+                alert("📋 Share not supported on this browser, but the report has been COPIED to clipboard! You can now paste it manually.");
+            });
+        }
     }
 
     // Professional Excel Logic
