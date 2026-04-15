@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StoreCash Pro</title>
+    <title>K-Store Pro</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -13,7 +13,7 @@
 <div class="container">
     <div id="dashboardPage" class="page active">
         <header style="margin-bottom: 20px;">
-            <h1 style="font-size: 1.6rem; color: var(--primary);">StoreCash Pro</h1>
+            <h1 style="font-size: 1.6rem; color: var(--primary);">K-Store Pro</h1>
             <div style="display: flex; gap:10px; margin-top:15px;">
                 <select id="storeSelect"></select>
                 <input type="date" id="datePicker">
@@ -393,7 +393,7 @@
                 report += `${item.type === 'income' ? '➕' : '➖'} ₹${item.amount.toFixed(2)} - ${item.description}\n`;
             });
         }
-        report += `--------------------------\n*Total Net Today: ${todayNet}*\n_Generated via StoreCash Pro_`;
+        report += `--------------------------\n*Total Net Today: ${todayNet}*\n_Generated via K-Store Pro_`;
 
         if (navigator.share) {
             try { await navigator.share({ title: `Report - ${storeName}`, text: report }); } catch (err) {}
@@ -437,7 +437,7 @@
         const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `StoreCash_Statement_${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `K-Store_Statement_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
     }
 
