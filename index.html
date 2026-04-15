@@ -30,7 +30,7 @@
         </div>
 
         <button class="btn" style="background: #25D366; width: 100%; margin-bottom: 15px; color: white; display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="shareDailyReport()">
-            <i class="fas fa-share-nodes"></i> Share Today's Report
+            <i class="fas fa-share-nodes" style="font-size: 1.2rem;"></i> Share Today's Report
         </button>
 
         <div class="card">
@@ -44,8 +44,8 @@
 
         <div class="card" style="padding: 10px; display: flex; gap: 8px; align-items: center; background: #f1f5f9;">
             <i class="fas fa-search" style="color: var(--text-light); margin-left: 10px;"></i>
-            <input type="text" id="searchInput" placeholder="Search notes..." style="margin-bottom: 0; border: none; background: transparent; padding: 8px;" onkeyup="renderTransactions()">
-            <select id="filterType" onchange="renderTransactions()" style="margin-bottom: 0; width: 110px; padding: 5px;">
+            <input type="text" id="searchInput" placeholder="Search notes..." style="margin-bottom: 0; border: none; background: transparent; padding: 8px;" onkeyup="filterTransactions()">
+            <select id="filterType" onchange="filterTransactions()" style="margin-bottom: 0; width: 110px; padding: 5px;">
                 <option value="all">All</option>
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
@@ -56,7 +56,7 @@
     </div>
 
     <div id="storesPage" class="page">
-        <h1>Manage Stores</h1>
+        <h1 style="margin-bottom: 10px;">Manage Stores</h1>
         <div class="card">
             <h3>Add New Store</h3><br>
             <input type="text" id="storeNameInput" placeholder="Store Name">
@@ -66,36 +66,92 @@
     </div>
 
     <div id="settingsPage" class="page">
-        <h1>Settings</h1>
+        <h1 style="margin-bottom: 10px;">Settings</h1>
         <div class="card" style="background: #f0fdf4; border: 1px solid #dcfce7;">
-            <h3 style="color: #166534;"><i class="fas fa-file-excel"></i> Excel Backup</h3>
+            <h3 style="color: #166534;"><i class="fas fa-file-excel"></i> Professional Excel Backup</h3>
+            <p style="font-size: 12px; margin: 8px 0; color: #166534;">Export with Running Balance (AM/PM Format).</p>
+            
             <div style="margin-bottom: 10px;">
-                <small>Select Store</small>
-                <select id="backupStoreSelect"></select>
+                <small>Select Store for Backup</small>
+                <select id="backupStoreSelect">
+                    <option value="all">All Stores (Combined)</option>
+                </select>
             </div>
+
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                <div><small>From</small><input type="date" id="backupFrom"></div>
-                <div><small>To</small><input type="date" id="backupTo"></div>
+                <div><small>From Date</small><input type="date" id="backupFrom"></div>
+                <div><small>To Date</small><input type="date" id="backupTo"></div>
             </div>
-            <button class="btn" style="background: #166534; width:100%" onclick="downloadExcelBackup()">Download CSV</button>
+            
+            <button class="btn" style="background: #166534; width:100%" onclick="downloadExcelBackup()">
+                <i class="fas fa-download"></i> Download Excel (.csv)
+            </button>
         </div>
 
         <div class="card">
-            <h3>Bulk Delete</h3>
+            <h3>Bulk Delete History</h3>
             <select id="bulkStoreSelect"></select>
             <div style="display: flex; gap: 10px;">
                 <input type="date" id="deleteFrom">
                 <input type="date" id="deleteTo">
             </div>
-            <button class="btn expense-btn" style="width:100%" onclick="bulkDelete()">Delete Range</button>
+            <button class="btn expense-btn" style="width:100%" onclick="bulkDelete()">Delete Selected Range</button>
         </div>
     </div>
 
     <div id="aboutPage" class="page">
         <div class="card" style="text-align: center; margin-top: 30px;">
+            
             <h2>System Status</h2>
-            <p>Professional Multi-Store Tracker</p>
-            <p style="font-weight: bold; color: var(--primary);">Powered By EnMate</p>
+
+            <p style="color:var(--text-light); margin: 10px 0;">
+                Professional Multi-Store Tracker
+            </p>
+
+            <hr style="opacity: 0.1; margin: 15px 0;">
+
+            <p style="font-weight: bold; color: var(--primary);">
+                Powered By EnMate
+            </p>
+
+            <!-- Description -->
+            <p style="
+                color: var(--text-light);
+                font-size: 14px;
+                margin-top: 10px;
+                line-height: 1.6;
+                max-width: 300px;
+                margin-left: auto;
+                margin-right: auto;
+            ">
+                We build digital solutions including websites, mobile apps, and strategic design & branding services.
+            </p>
+
+            <!-- Contact Icons -->
+            <div style="display: flex; gap: 20px; justify-content: center; margin-top: 20px;">
+
+                <!-- WhatsApp with message -->
+                <a href="https://wa.me/917909134464?text=Hi%20EnMate%20😊" 
+                target="_blank"
+                style="color:#25D366; font-size: 24px;">
+                    <i class="fab fa-whatsapp"></i>
+                </a>
+
+                <!-- Instagram -->
+                <a href="https://instagram.com/enmate.in" 
+                target="_blank"
+                style="color:#E1306C; font-size: 24px;">
+                    <i class="fab fa-instagram"></i>
+                </a>
+
+                <!-- Phone -->
+                <a href="tel:+917909134464" 
+                style="color:#3b82f6; font-size: 20px;">
+                    <i class="fas fa-phone"></i>
+                </a>
+
+            </div>
+
         </div>
     </div>
 </div>
@@ -109,25 +165,38 @@
 
 <script src="config.js"></script>
 <script>
-    // --- APP STATE & PERSISTENCE ---
+    // --- PERSISTENCE STATE ---
     let currentStoreId = localStorage.getItem('lastStoreId') || null;
     let selectedDate = new Date().toISOString().split('T')[0];
     let currentTransactions = JSON.parse(localStorage.getItem('cache_tx')) || [];
     let storesCache = JSON.parse(localStorage.getItem('cache_stores')) || [];
 
-    // --- INITIALIZATION ---
+    // --- INITIAL LOAD ---
     window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('datePicker').value = selectedDate;
         
-        // Instant Hydration from LocalStorage
+        // Load immediately from local storage if available
         if (storesCache.length > 0) {
-            updateAllStoreDropdowns();
-            renderTransactions();
+            updateAllDropdowns();
+            filterTransactions(); 
         }
         
-        // Background Sync
+        // Refresh from server in background
         fetchStores();
     });
+
+    // --- UTILITIES (YOUR ORIGINAL FORMATTING) ---
+    function formatTime12H(isoStr) {
+        const d = new Date(isoStr);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        let hh = d.getHours();
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hh >= 12 ? 'PM' : 'AM';
+        hh = hh % 12 || 12;
+        return `${day}/${month}/${year} ${hh}:${mm} ${ampm}`;
+    }
 
     // --- NAVIGATION ---
     function navigateTo(pageId) {
@@ -137,29 +206,33 @@
         if(event) event.currentTarget.classList.add('active');
         
         if (pageId === 'storesPage') renderStoresList();
+        if (pageId === 'settingsPage') updateAllDropdowns();
     }
 
-    // --- STORE LOGIC (SYNCED) ---
+    // --- STORE MANAGEMENT (FAST & CACHED) ---
     async function fetchStores() {
-        const { data } = await supabaseClient.from('stores').select('*').order('name');
-        if (data) {
-            storesCache = data;
-            localStorage.setItem('cache_stores', JSON.stringify(data));
-            updateAllStoreDropdowns();
-            if (!currentStoreId && data.length > 0) {
-                currentStoreId = data[0].id;
-                localStorage.setItem('lastStoreId', currentStoreId);
+        try {
+            const { data } = await supabaseClient.from('stores').select('*').order('name');
+            if (data) {
+                storesCache = data;
+                localStorage.setItem('cache_stores', JSON.stringify(data));
+                updateAllDropdowns();
+                if (!currentStoreId && data.length > 0) {
+                    currentStoreId = data[0].id;
+                    localStorage.setItem('lastStoreId', currentStoreId);
+                }
+                refreshUI(); // Fetch latest transactions for current store
             }
-            refreshUI();
-        }
+        } catch (e) { console.error("Offline Mode: Stores loaded from cache."); }
     }
 
-    function updateAllStoreDropdowns() {
+    function updateAllDropdowns() {
         const targets = ['storeSelect', 'backupStoreSelect', 'bulkStoreSelect'];
         targets.forEach(id => {
             const el = document.getElementById(id);
             if (!el) return;
-            let html = (id === 'backupStoreSelect') ? '<option value="all">All Stores</option>' : '';
+            
+            let html = (id === 'backupStoreSelect') ? `<option value="all">All Stores (Combined)</option>` : '';
             html += storesCache.map(s => `<option value="${s.id}" ${s.id == currentStoreId ? 'selected' : ''}>${s.name}</option>`).join('');
             el.innerHTML = html;
         });
@@ -168,46 +241,43 @@
     async function addNewStore() {
         const input = document.getElementById('storeNameInput');
         if (!input.value.trim()) return;
-        
         const { data, error } = await supabaseClient.from('stores').insert([{ name: input.value }]).select();
         if (!error) {
             storesCache.push(data[0]);
             localStorage.setItem('cache_stores', JSON.stringify(storesCache));
             input.value = '';
             renderStoresList();
-            updateAllStoreDropdowns();
+            updateAllDropdowns();
         }
     }
 
     async function editStore(id, oldName) {
         const newName = prompt("Edit Store Name:", oldName);
         if (!newName || newName === oldName) return;
-
         const { data, error } = await supabaseClient.from('stores').update({ name: newName }).eq('id', id).select();
         if (!error) {
             storesCache = storesCache.map(s => s.id === id ? data[0] : s);
             localStorage.setItem('cache_stores', JSON.stringify(storesCache));
             renderStoresList();
-            updateAllStoreDropdowns();
+            updateAllDropdowns();
         }
     }
 
     async function deleteStore(id) {
-        if (!confirm("Delete store and its history?")) return;
+        if (!confirm("Delete store? History remains in database.")) return;
         const { error } = await supabaseClient.from('stores').delete().eq('id', id);
         if (!error) {
             storesCache = storesCache.filter(s => s.id !== id);
             localStorage.setItem('cache_stores', JSON.stringify(storesCache));
             if (currentStoreId === id) currentStoreId = storesCache.length > 0 ? storesCache[0].id : null;
             renderStoresList();
-            updateAllStoreDropdowns();
+            updateAllDropdowns();
             refreshUI();
         }
     }
 
     function renderStoresList() {
-        const container = document.getElementById('storeListContainer');
-        container.innerHTML = storesCache.map(s => `
+        document.getElementById('storeListContainer').innerHTML = storesCache.map(s => `
             <div class="card" style="display:flex; justify-content:space-between; align-items:center; padding:10px 15px;">
                 <span><strong>${s.name}</strong></span>
                 <div class="action-btns">
@@ -217,7 +287,7 @@
             </div>`).join('');
     }
 
-    // --- TRANSACTION LOGIC (OPTIMISTIC) ---
+    // --- TRANSACTION LOGIC (OPTIMISTIC & CACHED) ---
     document.getElementById('datePicker').onchange = (e) => { selectedDate = e.target.value; refreshUI(); };
     document.getElementById('storeSelect').onchange = (e) => { 
         currentStoreId = e.target.value; 
@@ -231,27 +301,27 @@
         const first = new Date(dObj.getFullYear(), dObj.getMonth(), 1).toISOString().split('T')[0];
         const last = new Date(dObj.getFullYear(), dObj.getMonth() + 1, 0).toISOString().split('T')[0];
 
-        const { data } = await supabaseClient.from('transactions').select('*')
-            .eq('store_id', currentStoreId).gte('date', first).lte('date', last).order('created_at', { ascending: false });
-
-        if (data) {
-            currentTransactions = data;
-            localStorage.setItem('cache_tx', JSON.stringify(data));
-            renderTransactions();
-        }
+        try {
+            const { data } = await supabaseClient.from('transactions').select('*')
+                .eq('store_id', currentStoreId).gte('date', first).lte('date', last).order('created_at', { ascending: false });
+            if (data) {
+                currentTransactions = data;
+                localStorage.setItem('cache_tx', JSON.stringify(data));
+                filterTransactions();
+            }
+        } catch(e) { console.error("Offline: Using cached transactions."); }
     }
 
-    function renderTransactions() {
+    function filterTransactions() {
         const search = document.getElementById('searchInput').value.toLowerCase();
         const typeFilter = document.getElementById('filterType').value;
         const container = document.getElementById('transactionList');
         let daily = 0, monthly = 0;
-        
         container.innerHTML = '';
+
         currentTransactions.forEach(item => {
             const val = item.type === 'income' ? item.amount : -item.amount;
             monthly += val;
-
             if (item.date === selectedDate) {
                 daily += val;
                 if (item.description.toLowerCase().includes(search) && (typeFilter === 'all' || item.type === typeFilter)) {
@@ -260,8 +330,8 @@
                     div.style.padding = '12px';
                     div.style.display = 'flex';
                     div.style.justifyContent = 'space-between';
-                    if (item.isOptimistic) div.style.opacity = '0.5';
-                    
+                    if (item.isPending) div.style.opacity = '0.5';
+
                     div.innerHTML = `
                         <div><strong>${item.description}</strong><span class="meta-date">${formatTime12H(item.created_at)}</span></div>
                         <div style="color:${item.type==='income'?'var(--success)':'var(--danger)'};font-weight:700;">
@@ -276,63 +346,59 @@
     }
 
     async function addTransaction(type) {
-        const amtEl = document.getElementById('amount');
-        const descEl = document.getElementById('description');
-        const amount = parseFloat(amtEl.value);
-        const description = descEl.value || type;
+        const amtInput = document.getElementById('amount');
+        const descInput = document.getElementById('description');
+        const amount = parseFloat(amtInput.value);
+        if (!currentStoreId || isNaN(amount)) return alert("Enter amount");
 
-        if (!currentStoreId || isNaN(amount)) return;
-
-        // 1. Optimistic UI update
+        // Optimistic UI update
         const tempItem = {
             id: Date.now(),
-            amount, type, description, 
-            date: selectedDate, 
+            amount: amount,
+            type: type,
+            description: descInput.value || type,
+            date: selectedDate,
             created_at: new Date().toISOString(),
-            isOptimistic: true
+            isPending: true
         };
         currentTransactions.unshift(tempItem);
-        renderTransactions();
-        amtEl.value = ''; descEl.value = '';
+        filterTransactions();
+        amtInput.value = ''; descInput.value = '';
 
-        // 2. Background Sync
+        // Save to server
         const { data, error } = await supabaseClient.from('transactions').insert([{
-            store_id: currentStoreId, amount, type, description, date: selectedDate
+            store_id: currentStoreId, amount: amount, type,
+            description: tempItem.description, date: selectedDate, created_at: tempItem.created_at
         }]).select();
 
         if (!error) {
             currentTransactions = currentTransactions.map(t => t.id === tempItem.id ? data[0] : t);
             localStorage.setItem('cache_tx', JSON.stringify(currentTransactions));
-            renderTransactions();
+            filterTransactions();
         }
     }
 
-    // --- UTILS ---
-    function formatTime12H(isoStr) {
-        const d = new Date(isoStr);
-        let hh = d.getHours();
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        const ampm = hh >= 12 ? 'PM' : 'AM';
-        hh = hh % 12 || 12;
-        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${hh}:${mm} ${ampm}`;
-    }
-
+    // --- SHARE & EXCEL (YOUR ORIGINAL LOGIC) ---
     async function shareDailyReport() {
-        if (!currentStoreId) return;
+        if (!currentStoreId) return alert("Please select a store");
         const storeName = document.getElementById('storeSelect').options[document.getElementById('storeSelect').selectedIndex].text;
-        let report = `*📊 Daily Report: ${storeName}*\n*Date:* ${selectedDate}\n--------------------------\n`;
+        const todayNet = document.getElementById('todayNet').textContent;
+        const dateStr = new Date(selectedDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         
-        const items = currentTransactions.filter(i => i.date === selectedDate).reverse();
-        items.forEach(item => {
-            report += `${item.type === 'income' ? '➕' : '➖'} ₹${item.amount.toFixed(2)} - ${item.description}\n`;
-        });
-        report += `--------------------------\n*Total Net: ${document.getElementById('todayNet').textContent}*\n_via StoreCash Pro_`;
+        let report = `*📊 Daily Report: ${storeName}*\n*Date:* ${dateStr}\n--------------------------\n`;
+        const todayItems = currentTransactions.filter(item => item.date === selectedDate);
+        if(todayItems.length === 0) report += `No transactions recorded.\n`;
+        else {
+            [...todayItems].reverse().forEach(item => {
+                report += `${item.type === 'income' ? '➕' : '➖'} ₹${item.amount.toFixed(2)} - ${item.description}\n`;
+            });
+        }
+        report += `--------------------------\n*Total Net Today: ${todayNet}*\n_Generated via StoreCash Pro_`;
 
         if (navigator.share) {
-            await navigator.share({ title: 'Daily Report', text: report });
+            try { await navigator.share({ title: `Report - ${storeName}`, text: report }); } catch (err) {}
         } else {
-            navigator.clipboard.writeText(report);
-            alert("Report copied to clipboard!");
+            navigator.clipboard.writeText(report).then(() => alert("📋 Copied to clipboard!"));
         }
     }
 
@@ -341,24 +407,37 @@
         const to = document.getElementById('backupTo').value;
         const storeId = document.getElementById('backupStoreSelect').value;
 
-        let query = supabaseClient.from('transactions').select('*, stores(name)').order('date', { ascending: true });
+        let query = supabaseClient.from('transactions').select('*, stores(name)')
+            .order('date', { ascending: true }).order('created_at', { ascending: true });
+
         if (storeId !== 'all') query = query.eq('store_id', storeId);
 
-        const { data } = await query;
-        if (!data) return;
+        const { data, error } = await query;
+        if (error || !data) return alert("Error fetching data");
 
-        let csv = "sep=\t\nDate\tTime\tStore\tNote\tType\tAmount\tBalance\n";
+        let csv = "sep=\t\nDate\tTime\tStore\tNote\tType\tAmount\tRunning Balance\n";
         let bal = 0;
+
         data.forEach(item => {
+            const dObj = new Date(item.created_at || item.date);
+            const dateStr = `${String(dObj.getDate()).padStart(2,'0')}/${String(dObj.getMonth()+1).padStart(2,'0')}/${dObj.getFullYear()}`;
+            let hh = dObj.getHours();
+            const ampm = hh >= 12 ? 'PM' : 'AM';
+            hh = hh % 12 || 12;
+            const timeStr = `${hh}:${String(dObj.getMinutes()).padStart(2,'0')} ${ampm}`;
+
+            const amt = parseFloat(item.amount);
+            bal += (item.type === 'income' ? amt : -amt);
+
             if ((!from || item.date >= from) && (!to || item.date <= to)) {
-                bal += (item.type === 'income' ? item.amount : -item.amount);
-                csv += `${item.date}\t${formatTime12H(item.created_at)}\t${item.stores.name}\t${item.description}\t${item.type}\t${item.amount}\t${bal}\n`;
+                csv += `${dateStr}\t${timeStr}\t${item.stores?.name || 'N/A'}\t${(item.description || '').replace(/\t/g, ' ')}\t${item.type.toUpperCase()}\t${amt.toFixed(2)}\t${bal.toFixed(2)}\n`;
             }
         });
+
         const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `StoreCash_Backup.csv`;
+        a.download = `StoreCash_Statement_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
     }
 
@@ -366,7 +445,7 @@
         const sid = document.getElementById('bulkStoreSelect').value;
         const from = document.getElementById('deleteFrom').value;
         const to = document.getElementById('deleteTo').value;
-        if (confirm("Permanently delete range?")) {
+        if (confirm("Permanently delete this range?")) {
             await supabaseClient.from('transactions').delete().eq('store_id', sid).gte('date', from).lte('date', to);
             refreshUI();
         }
