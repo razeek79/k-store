@@ -450,6 +450,14 @@
             refreshUI();
         }
     }
+
+    // Add this anywhere in your <script>
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            console.log("App resumed - Refreshing data...");
+            fetchStores(); // This will trigger the full refresh chain
+        }
+    });
 </script>
 </body>
 </html>
