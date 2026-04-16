@@ -3,17 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K-Store Pro</title>
+    <title>  K-Store</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<div id="offlineToast" class="network-toast">
+    <span class="icon">⚠️</span>
+    <span class="text">You're offline. Data will sync when connection is restored.</span>
+</div>
 
 <div class="container">
     <div id="dashboardPage" class="page active">
         <header style="margin-bottom: 20px;">
-            <h1 style="font-size: 1.6rem; color: var(--primary);">K-Store Pro</h1>
+            <h1 style="font-size: 1.6rem; color: var(--primary);">  K-Store</h1>
             <div style="display: flex; gap:10px; margin-top:15px;">
                 <select id="storeSelect"></select>
                 <input type="date" id="datePicker">
@@ -172,18 +176,82 @@
     let storesCache = JSON.parse(localStorage.getItem('cache_stores')) || [];
 
     // --- INITIAL LOAD ---
-    window.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('datePicker').value = selectedDate;
-        
-        // Load immediately from local storage if available
+    // --- IMPROVED INITIAL LOAD ---
+    async function startup() {
+        // 1. Initialize the Date Picker UI (Don't forget this!)
+        const datePicker = document.getElementById('datePicker');
+        if (datePicker) datePicker.value = selectedDate;
+
+        // 2. Immediately show what we have in the phone's memory (Instant Load)
         if (storesCache.length > 0) {
             updateAllDropdowns();
             filterTransactions(); 
         }
-        
-        // Refresh from server in background
-        fetchStores();
+
+        // 3. Wait 500ms for mobile data to wake up, then sync with server
+        setTimeout(async () => {
+            await fetchStores();
+        }, 500);
+    }
+
+    // Trigger startup on load
+    window.addEventListener('DOMContentLoaded', startup);
+
+    // --- REFRESH ON RESUME ---
+    // This handles the "Recent Apps" lag you mentioned
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            console.log("App resumed from background. Syncing...");
+            refreshUI(); 
+        }
     });
+
+    // --- UPDATED FETCH STORES ---
+    async function fetchStores() {
+        try {
+            const { data, error } = await supabaseClient
+                .from('stores')
+                .select('*')
+                .order('name');
+            
+            // If Supabase returns an error (like 404 or connection timeout), jump to catch
+            if (error) throw error; 
+
+            if (data) {
+                storesCache = data;
+                // Save to phone memory for instant loading next time
+                localStorage.setItem('cache_stores', JSON.stringify(data));
+                
+                updateAllDropdowns();
+                
+                // Auto-select first store if none selected
+                if (!currentStoreId && data.length > 0) {
+                    currentStoreId = data[0].id;
+                    localStorage.setItem('lastStoreId', currentStoreId);
+                }
+                
+                // Proceed to get the transactions for the selected store
+                refreshUI(); 
+            }
+        } catch (e) { 
+            console.warn("Stores sync failed. Using cache.");
+            showNetworkWarning(); // Aggressive blinking warning
+        }
+    }
+
+    // Function to trigger the 2-second blinking warning
+    function showNetworkWarning() {
+        const toast = document.getElementById('offlineToast');
+        if (!toast) return;
+        
+        // Show and start the fast blinking
+        toast.style.display = 'block';
+        
+        // Auto-hide after 2 seconds
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 2000); 
+    }
 
     // --- UTILITIES (YOUR ORIGINAL FORMATTING) ---
     function formatTime12H(isoStr) {
@@ -210,21 +278,6 @@
     }
 
     // --- STORE MANAGEMENT (FAST & CACHED) ---
-    async function fetchStores() {
-        try {
-            const { data } = await supabaseClient.from('stores').select('*').order('name');
-            if (data) {
-                storesCache = data;
-                localStorage.setItem('cache_stores', JSON.stringify(data));
-                updateAllDropdowns();
-                if (!currentStoreId && data.length > 0) {
-                    currentStoreId = data[0].id;
-                    localStorage.setItem('lastStoreId', currentStoreId);
-                }
-                refreshUI(); // Fetch latest transactions for current store
-            }
-        } catch (e) { console.error("Offline Mode: Stores loaded from cache."); }
-    }
 
     function updateAllDropdowns() {
         const targets = ['storeSelect', 'backupStoreSelect', 'bulkStoreSelect'];
@@ -297,19 +350,34 @@
 
     async function refreshUI() {
         if (!currentStoreId) return;
+        
         const dObj = new Date(selectedDate);
         const first = new Date(dObj.getFullYear(), dObj.getMonth(), 1).toISOString().split('T')[0];
         const last = new Date(dObj.getFullYear(), dObj.getMonth() + 1, 0).toISOString().split('T')[0];
 
         try {
-            const { data } = await supabaseClient.from('transactions').select('*')
-                .eq('store_id', currentStoreId).gte('date', first).lte('date', last).order('created_at', { ascending: false });
+            const { data, error } = await supabaseClient
+                .from('transactions')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .gte('date', first)
+                .lte('date', last)
+                .order('created_at', { ascending: false });
+            
+            // Ensure network failures or query errors trigger the blinking warning
+            if (error) throw error; 
+
             if (data) {
                 currentTransactions = data;
+                // Update local cache with latest server data
                 localStorage.setItem('cache_tx', JSON.stringify(data));
+                // Update the UI list and totals
                 filterTransactions();
             }
-        } catch(e) { console.error("Offline: Using cached transactions."); }
+        } catch(e) { 
+            console.error("Transaction sync failed. Data might be outdated.");
+            showNetworkWarning(); // Aggressive blinking warning
+        }
     }
 
     function filterTransactions() {
@@ -393,7 +461,7 @@
                 report += `${item.type === 'income' ? '➕' : '➖'} ₹${item.amount.toFixed(2)} - ${item.description}\n`;
             });
         }
-        report += `--------------------------\n*Total Net Today: ${todayNet}*\n_Generated via K-Store Pro_`;
+        report += `--------------------------\n*Total Net Today: ${todayNet}*\n_Generated via   K-Store_`;
 
         if (navigator.share) {
             try { await navigator.share({ title: `Report - ${storeName}`, text: report }); } catch (err) {}
@@ -450,14 +518,6 @@
             refreshUI();
         }
     }
-
-    // Add this anywhere in your <script>
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            console.log("App resumed - Refreshing data...");
-            fetchStores(); // This will trigger the full refresh chain
-        }
-    });
 </script>
 </body>
 </html>
