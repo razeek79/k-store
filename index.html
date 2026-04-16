@@ -11,7 +11,8 @@
 <body>
 <div id="offlineToast" class="network-toast">
     <span class="icon">⚠️</span>
-    <span class="text">You're offline. Data will sync when connection is restored.</span>
+    <span class="text">Message</span>
+    <span class="spinner"></span>
 </div>
 
 <div class="container">
@@ -175,85 +176,128 @@
     let currentTransactions = JSON.parse(localStorage.getItem('cache_tx')) || [];
     let storesCache = JSON.parse(localStorage.getItem('cache_stores')) || [];
 
+    const toast = document.getElementById('offlineToast');
+
+    // --- NETWORK STATUS MANAGER ---
+    function updateNetworkStatus() {
+        const spinner = toast.querySelector('.spinner');
+
+        if (navigator.onLine) {
+            if (toast.classList.contains('offline')) {
+
+                toast.classList.remove('offline');
+                toast.classList.add('online');
+
+                toast.querySelector('.icon').textContent = '🌐';
+                toast.querySelector('.text').textContent = 'Welcome Back. Syncing your data...';
+
+                spinner.style.display = 'inline-block'; // ✅ SHOW spinner
+                toast.classList.add('show');
+
+                refreshUI();
+
+                setTimeout(() => {
+                    // ✅ Step 2: Show success
+                    spinner.style.display = 'none';
+                    toast.querySelector('.icon').textContent = '✅';
+                    toast.querySelector('.text').textContent = 'All data synced';
+
+                    setTimeout(() => {
+                        toast.classList.remove('show');
+                    }, 1500);
+
+                }, 2000);
+            }
+
+        } else {
+            toast.classList.remove('online');
+            toast.classList.add('offline');
+
+            spinner.style.display = 'none'; // ❌ No spinner offline
+
+            toast.querySelector('.icon').textContent = '📴';
+            toast.querySelector('.text').textContent = "Hey Shanil, You're offline. Using cached data.";
+
+            toast.classList.add('show');
+        }
+    }
+
+    window.addEventListener('online', updateNetworkStatus);
+    window.addEventListener('offline', updateNetworkStatus);
+
     // --- INITIAL LOAD ---
-    // --- IMPROVED INITIAL LOAD ---
     async function startup() {
-        // 1. Initialize the Date Picker UI (Don't forget this!)
         const datePicker = document.getElementById('datePicker');
         if (datePicker) datePicker.value = selectedDate;
 
-        // 2. Immediately show what we have in the phone's memory (Instant Load)
+        updateNetworkStatus();
+
+        // Instant UI from Cache
         if (storesCache.length > 0) {
             updateAllDropdowns();
             filterTransactions(); 
         }
 
-        // 3. Wait 500ms for mobile data to wake up, then sync with server
-        setTimeout(async () => {
-            await fetchStores();
-        }, 500);
+        if (navigator.onLine) {
+            setTimeout(fetchStores, 500);
+        }
     }
 
-    // Trigger startup on load
     window.addEventListener('DOMContentLoaded', startup);
 
     // --- REFRESH ON RESUME ---
-    // This handles the "Recent Apps" lag you mentioned
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            console.log("App resumed from background. Syncing...");
+        if (document.visibilityState === 'visible' && navigator.onLine) {
             refreshUI(); 
         }
     });
 
-    // --- UPDATED FETCH STORES ---
+    // --- CORE DATA FETCHING ---
     async function fetchStores() {
         try {
-            const { data, error } = await supabaseClient
-                .from('stores')
-                .select('*')
-                .order('name');
-            
-            // If Supabase returns an error (like 404 or connection timeout), jump to catch
-            if (error) throw error; 
+            const { data, error } = await supabaseClient.from('stores').select('*').order('name');
+            if (error) throw error;
 
             if (data) {
                 storesCache = data;
-                // Save to phone memory for instant loading next time
                 localStorage.setItem('cache_stores', JSON.stringify(data));
-                
                 updateAllDropdowns();
-                
-                // Auto-select first store if none selected
                 if (!currentStoreId && data.length > 0) {
                     currentStoreId = data[0].id;
                     localStorage.setItem('lastStoreId', currentStoreId);
                 }
-                
-                // Proceed to get the transactions for the selected store
                 refreshUI(); 
             }
-        } catch (e) { 
-            console.warn("Stores sync failed. Using cache.");
-            showNetworkWarning(); // Aggressive blinking warning
+        } catch (e) {
+            console.warn("API Delay - Internet is ON but server is slow.");
         }
     }
 
-    // Function to trigger the 2-second blinking warning
-    function showNetworkWarning() {
-        const toast = document.getElementById('offlineToast');
-        if (!toast) return;
-        
-        // Show and start the fast blinking
-        toast.style.display = 'block';
-        
-        // Auto-hide after 2 seconds
-        setTimeout(() => {
-            toast.style.display = 'none';
-        }, 2000); 
+    async function refreshUI() {
+        if (!currentStoreId || !navigator.onLine) return;
+
+        const dObj = new Date(selectedDate);
+        const first = new Date(dObj.getFullYear(), dObj.getMonth(), 1).toISOString().split('T')[0];
+        const last = new Date(dObj.getFullYear(), dObj.getMonth() + 1, 0).toISOString().split('T')[0];
+
+        try {
+            const { data, error } = await supabaseClient.from('transactions').select('*')
+                .eq('store_id', currentStoreId).gte('date', first).lte('date', last)
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+
+            if (data) {
+                currentTransactions = data;
+                localStorage.setItem('cache_tx', JSON.stringify(data));
+                filterTransactions();
+            }
+        } catch(e) {
+            console.error("Sync error.");
+        }
     }
 
-    // --- UTILITIES (YOUR ORIGINAL FORMATTING) ---
+    // --- UTILITIES ---
     function formatTime12H(isoStr) {
         const d = new Date(isoStr);
         const day = String(d.getDate()).padStart(2, '0');
@@ -277,14 +321,12 @@
         if (pageId === 'settingsPage') updateAllDropdowns();
     }
 
-    // --- STORE MANAGEMENT (FAST & CACHED) ---
-
+    // --- STORE MANAGEMENT ---
     function updateAllDropdowns() {
         const targets = ['storeSelect', 'backupStoreSelect', 'bulkStoreSelect'];
         targets.forEach(id => {
             const el = document.getElementById(id);
             if (!el) return;
-            
             let html = (id === 'backupStoreSelect') ? `<option value="all">All Stores (Combined)</option>` : '';
             html += storesCache.map(s => `<option value="${s.id}" ${s.id == currentStoreId ? 'selected' : ''}>${s.name}</option>`).join('');
             el.innerHTML = html;
@@ -340,45 +382,13 @@
             </div>`).join('');
     }
 
-    // --- TRANSACTION LOGIC (OPTIMISTIC & CACHED) ---
+    // --- TRANSACTION LOGIC ---
     document.getElementById('datePicker').onchange = (e) => { selectedDate = e.target.value; refreshUI(); };
     document.getElementById('storeSelect').onchange = (e) => { 
         currentStoreId = e.target.value; 
         localStorage.setItem('lastStoreId', currentStoreId);
         refreshUI(); 
     };
-
-    async function refreshUI() {
-        if (!currentStoreId) return;
-        
-        const dObj = new Date(selectedDate);
-        const first = new Date(dObj.getFullYear(), dObj.getMonth(), 1).toISOString().split('T')[0];
-        const last = new Date(dObj.getFullYear(), dObj.getMonth() + 1, 0).toISOString().split('T')[0];
-
-        try {
-            const { data, error } = await supabaseClient
-                .from('transactions')
-                .select('*')
-                .eq('store_id', currentStoreId)
-                .gte('date', first)
-                .lte('date', last)
-                .order('created_at', { ascending: false });
-            
-            // Ensure network failures or query errors trigger the blinking warning
-            if (error) throw error; 
-
-            if (data) {
-                currentTransactions = data;
-                // Update local cache with latest server data
-                localStorage.setItem('cache_tx', JSON.stringify(data));
-                // Update the UI list and totals
-                filterTransactions();
-            }
-        } catch(e) { 
-            console.error("Transaction sync failed. Data might be outdated.");
-            showNetworkWarning(); // Aggressive blinking warning
-        }
-    }
 
     function filterTransactions() {
         const search = document.getElementById('searchInput').value.toLowerCase();
@@ -419,7 +429,6 @@
         const amount = parseFloat(amtInput.value);
         if (!currentStoreId || isNaN(amount)) return alert("Enter amount");
 
-        // Optimistic UI update
         const tempItem = {
             id: Date.now(),
             amount: amount,
@@ -433,7 +442,6 @@
         filterTransactions();
         amtInput.value = ''; descInput.value = '';
 
-        // Save to server
         const { data, error } = await supabaseClient.from('transactions').insert([{
             store_id: currentStoreId, amount: amount, type,
             description: tempItem.description, date: selectedDate, created_at: tempItem.created_at
@@ -446,7 +454,7 @@
         }
     }
 
-    // --- SHARE & EXCEL (YOUR ORIGINAL LOGIC) ---
+    // --- SHARE & EXCEL ---
     async function shareDailyReport() {
         if (!currentStoreId) return alert("Please select a store");
         const storeName = document.getElementById('storeSelect').options[document.getElementById('storeSelect').selectedIndex].text;
@@ -461,7 +469,7 @@
                 report += `${item.type === 'income' ? '➕' : '➖'} ₹${item.amount.toFixed(2)} - ${item.description}\n`;
             });
         }
-        report += `--------------------------\n*Total Net Today: ${todayNet}*\n_Generated via   K-Store_`;
+        report += `--------------------------\n*Total Net Today: ${todayNet}*\n_Generated via K-Store_`;
 
         if (navigator.share) {
             try { await navigator.share({ title: `Report - ${storeName}`, text: report }); } catch (err) {}

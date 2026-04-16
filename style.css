@@ -53,50 +53,61 @@ input, select { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-ra
 }
 
 /* Fast Blinking Warning */
+/* Updated Toast UI */
 .network-toast {
     position: fixed;
     top: 20px;
     left: 50%;
-    transform: translateX(-50%) translateY(-20px);
-    
+    transform: translateX(-50%) translateY(-120px);
+
     display: flex;
     align-items: center;
     gap: 10px;
 
-    background: #1f2937; /* dark professional */
-    color: #fff;
     padding: 12px 18px;
-    border-radius: 10px;
+    border-radius: 14px;
 
     font-size: 14px;
     font-weight: 500;
 
-    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
-    
+    backdrop-filter: blur(10px);
+    background: rgba(31, 41, 55, 0.9);
+
+    color: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+
     opacity: 0;
-    pointer-events: none;
-    transition: all 0.3s ease;
-    z-index: 9999;
+    transition: all 0.4s ease;
+
+    z-index: 10000;
 }
 
-/* Show state */
+/* Show */
 .network-toast.show {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
 
-/* Icon style */
-.network-toast .icon {
-    font-size: 16px;
+/* Offline (soft red, no blinking) */
+.network-toast.offline {
+    background: rgba(239, 68, 68, 0.95);
 }
 
-/* Optional subtle pulse (not annoying) */
-.network-toast.show {
-    animation: pulse 2s infinite;
+/* Online (premium green) */
+.network-toast.online {
+    background: rgba(16, 185, 129, 0.95);
 }
 
-@keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
-    70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
-    100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+.spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top: 2px solid #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
