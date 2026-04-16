@@ -232,26 +232,35 @@
 
         console.log(`Syncing ${queue.length} items...`);
 
-        for (let i = 0; i < queue.length; i++) {
-            const item = queue[i];
-            
-            const { error } = await supabaseClient.from('transactions').insert([{
+        // Use a copy of the queue to iterate safely
+        for (const item of [...queue]) {
+            const { data, error } = await supabaseClient.from('transactions').insert([{
                 store_id: item.store_id,
                 amount: item.amount,
                 type: item.type,
                 description: item.description,
                 date: item.date,
                 created_at: item.created_at
-            }]);
+            }]).select();
 
             if (!error) {
-                // Remove this specific item from queue after successful upload
+                // 1. Immediately remove this item from the local queue
                 queue = queue.filter(q => q.id !== item.id);
                 localStorage.setItem('sync_queue', JSON.stringify(queue));
+
+                // 2. Add the real database item to our active list and remove the temp one
+                // This removes the "faded" look for THIS specific item instantly
+                currentTransactions = currentTransactions.filter(t => t.id !== item.id);
+                currentTransactions.unshift(data[0]);
+
+                // 3. Refresh UI instantly for this one item
+                filterTransactions(); 
+            } else {
+                console.error("Sync failed for item:", item.description, error);
             }
         }
         
-        // Final UI refresh to remove "pending" opacity
+        // Final UI refresh to ensure everything is perfectly aligned
         refreshUI(); 
     }
 
