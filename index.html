@@ -2,11 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>  K-Store</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>K-Store</title>
+    
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="K-Store">
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="images/k-store-180.png">
+    <link rel="icon" type="image/png" href="images/k-store-192.png">
+
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('SW Registered'))
+                    .catch(err => console.log('SW Registration Failed', err));
+            });
+        }
+    </script>
 </head>
 <body>
 <div id="offlineToast" class="network-toast">
@@ -47,14 +68,16 @@
             </div>
         </div>
 
+        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+            <div style="background: #e2e8f0; padding: 4px; border-radius: 8px; display: flex; width: 100%;">
+                <button id="viewDaily" class="toggle-btn active" onclick="setViewMode('daily')" style="flex:1; border:none; padding: 8px; border-radius: 6px; cursor:pointer;">Daily</button>
+                <button id="viewMonthly" class="toggle-btn" onclick="setViewMode('monthly')" style="flex:1; border:none; padding: 8px; border-radius: 6px; cursor:pointer;">Monthly</button>
+            </div>
+        </div>
+
         <div class="card" style="padding: 10px; display: flex; gap: 8px; align-items: center; background: #f1f5f9;">
             <i class="fas fa-search" style="color: var(--text-light); margin-left: 10px;"></i>
             <input type="text" id="searchInput" placeholder="Search notes..." style="margin-bottom: 0; border: none; background: transparent; padding: 8px;" onkeyup="filterTransactions()">
-            <select id="filterType" onchange="filterTransactions()" style="margin-bottom: 0; width: 110px; padding: 5px;">
-                <option value="all">All</option>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-            </select>
         </div>
         
         <div id="transactionList"></div>
@@ -162,10 +185,18 @@
 </div>
 
 <nav class="navbar">
-    <button class="nav-item active" onclick="navigateTo('dashboardPage')"><i class="fas fa-chart-pie"></i>Dashboard</button>
-    <button class="nav-item" onclick="navigateTo('storesPage')"><i class="fas fa-store"></i>Stores</button>
-    <button class="nav-item" onclick="navigateTo('settingsPage')"><i class="fas fa-cog"></i>Settings</button>
-    <button class="nav-item" onclick="navigateTo('aboutPage')"><i class="fas fa-info-circle"></i>About</button>
+    <button class="nav-item active" onclick="navigateTo('dashboardPage', this)">
+        <i class="fas fa-chart-pie"></i>Dashboard
+    </button>
+    <button class="nav-item" onclick="navigateTo('storesPage', this)">
+        <i class="fas fa-store"></i>Stores
+    </button>
+    <button class="nav-item" onclick="navigateTo('settingsPage', this)">
+        <i class="fas fa-cog"></i>Settings
+    </button>
+    <button class="nav-item" onclick="navigateTo('aboutPage', this)">
+        <i class="fas fa-info-circle"></i>About
+    </button>
 </nav>
 
 <script src="config.js"></script>
@@ -363,12 +394,26 @@
     }
 
     // --- NAVIGATION ---
-    function navigateTo(pageId) {
+    // --- NAVIGATION ---
+    function navigateTo(pageId, el) {
+        // 1. Hide all pages and remove active class from all nav items
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        document.getElementById(pageId).classList.add('active');
-        if(event) event.currentTarget.classList.add('active');
+
+        // 2. Show the target page
+        const targetPage = document.getElementById(pageId);
+        if (targetPage) targetPage.classList.add('active');
+
+        // 3. Highlight the clicked nav item (the "el" we passed)
+        if (el) {
+            el.classList.add('active');
+        } else {
+            // Fallback: if called without 'this', find the button manually
+            const navBtn = document.querySelector(`.nav-item[onclick*="${pageId}"]`);
+            if (navBtn) navBtn.classList.add('active');
+        }
         
+        // 4. Trigger specific page logic
         if (pageId === 'storesPage') renderStoresList();
         if (pageId === 'settingsPage') updateAllDropdowns();
     }
@@ -442,51 +487,116 @@
         refreshUI(); 
     };
 
+    let viewMode = 'daily'; // default
+
+    function setViewMode(mode) {
+        viewMode = mode;
+        document.getElementById('viewDaily').classList.toggle('active', mode === 'daily');
+        document.getElementById('viewMonthly').classList.toggle('active', mode === 'monthly');
+        
+        // Optional: Change the Stat Box Label
+        document.querySelector('#todayNet').previousElementSibling.textContent = 
+            mode === 'daily' ? 'Today Net' : 'Month Total';
+            
+        filterTransactions();
+    }
+
     function filterTransactions() {
         const search = document.getElementById('searchInput').value.toLowerCase();
-        const typeFilter = document.getElementById('filterType').value;
         const container = document.getElementById('transactionList');
         let daily = 0, monthly = 0;
         container.innerHTML = '';
 
-        // 1. Get items waiting to be synced from local memory
         const queue = JSON.parse(localStorage.getItem('sync_queue')) || [];
-        
-        // 2. Combine the Offline Queue items with the Saved Database items
         const allItems = [...queue, ...currentTransactions];
+
+        // 👉 GROUP BY DATE
+        const grouped = {};
 
         allItems.forEach(item => {
             const val = item.type === 'income' ? item.amount : -item.amount;
             monthly += val;
-            
-            if (item.date === selectedDate) {
-                daily += val;
-                if (item.description.toLowerCase().includes(search) && (typeFilter === 'all' || item.type === typeFilter)) {
-                    const div = document.createElement('div');
-                    div.className = 'card';
-                    div.style.padding = '12px';
-                    div.style.display = 'flex';
-                    div.style.justifyContent = 'space-between';
-                    
-                    // If it's an offline item, make it look faded
-                    if (item.isPending) div.style.opacity = '0.5';
 
-                    div.innerHTML = `
-                        <div>
-                            <strong>${item.description}</strong>
-                            ${item.isPending ? '<br><small style="color:#f59e0b"><i class="fas fa-clock"></i> Syncing...</small>' : `<span class="meta-date">${formatTime12H(item.created_at)}</span>`}
-                        </div>
-                        <div style="color:${item.type==='income'?'var(--success)':'var(--danger)'};font-weight:700;">
-                            ${item.type==='income'?'+':'-'}₹${item.amount.toFixed(2)}
-                        </div>`;
-                    container.appendChild(div);
-                }
-            }
+            if (!grouped[item.date]) grouped[item.date] = [];
+            grouped[item.date].push(item);
+
+            if (item.date === selectedDate) daily += val;
         });
-        document.getElementById('todayNet').textContent = `₹${daily.toFixed(2)}`;
-        document.getElementById('monthNet').textContent = `₹${monthly.toFixed(2)}`;
+
+        // 👉 DAILY VIEW (same as before)
+        if (viewMode === 'daily') {
+            (grouped[selectedDate] || []).forEach(item => {
+                if (item.description.toLowerCase().includes(search)) {
+                    renderItem(container, item);
+                }
+            });
+        }
+
+        // 👉 MONTHLY VIEW (GROUPED)
+        if (viewMode === 'monthly') {
+            Object.keys(grouped).sort().reverse().forEach(date => {
+
+                let dayTotal = 0;
+
+                // Calculate day total
+                grouped[date].forEach(i => {
+                    dayTotal += (i.type === 'income' ? i.amount : -i.amount);
+                });
+
+                // 👉 DATE HEADER
+                const header = document.createElement('div');
+                header.style.marginTop = '10px';
+                header.style.fontWeight = 'bold';
+                header.style.color = '#64748b';
+                header.innerHTML = `
+                    ${date} 
+                    <span style="float:right; color:${dayTotal >= 0 ? 'green' : 'red'};">
+                        ₹${dayTotal.toFixed(2)}
+                    </span>
+                `;
+                container.appendChild(header);
+
+                // 👉 ITEMS UNDER DATE
+                grouped[date].forEach(item => {
+                    if (item.description.toLowerCase().includes(search)) {
+                        renderItem(container, item);
+                    }
+                });
+
+            });
+        }
+
+        document.getElementById('todayNet').textContent =
+            `₹${(viewMode === 'daily' ? daily : monthly).toFixed(2)}`;
+
+        document.getElementById('monthNet').textContent =
+            `₹${monthly.toFixed(2)}`;
     }
 
+    function renderItem(container, item) {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.padding = '12px';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+
+        if (item.isPending) div.style.opacity = '0.5';
+
+        div.innerHTML = `
+            <div>
+                <strong>${item.description}</strong>
+                <br>
+                <small class="meta-date">${formatTime12H(item.created_at)}</small>
+            </div>
+            <div style="color:${item.type==='income'?'var(--success)':'var(--danger)'};font-weight:700;">
+                ${item.type==='income'?'+':'-'}₹${item.amount.toFixed(2)}
+            </div>
+        `;
+
+        container.appendChild(div);
+    }
+
+    
     async function addTransaction(type) {
         const amtInput = document.getElementById('amount');
         const descInput = document.getElementById('description');
