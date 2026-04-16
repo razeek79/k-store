@@ -194,6 +194,10 @@
                 spinner.style.display = 'inline-block'; // ✅ SHOW spinner
                 toast.classList.add('show');
 
+                // --- ADD THIS LINE ---
+                syncOfflineData(); 
+                // ---------------------
+
                 refreshUI();
 
                 setTimeout(() => {
@@ -220,6 +224,35 @@
 
             toast.classList.add('show');
         }
+    }
+
+    async function syncOfflineData() {
+        let queue = JSON.parse(localStorage.getItem('sync_queue')) || [];
+        if (queue.length === 0) return;
+
+        console.log(`Syncing ${queue.length} items...`);
+
+        for (let i = 0; i < queue.length; i++) {
+            const item = queue[i];
+            
+            const { error } = await supabaseClient.from('transactions').insert([{
+                store_id: item.store_id,
+                amount: item.amount,
+                type: item.type,
+                description: item.description,
+                date: item.date,
+                created_at: item.created_at
+            }]);
+
+            if (!error) {
+                // Remove this specific item from queue after successful upload
+                queue = queue.filter(q => q.id !== item.id);
+                localStorage.setItem('sync_queue', JSON.stringify(queue));
+            }
+        }
+        
+        // Final UI refresh to remove "pending" opacity
+        refreshUI(); 
     }
 
     window.addEventListener('online', updateNetworkStatus);
@@ -274,26 +307,36 @@
     }
 
     async function refreshUI() {
-        if (!currentStoreId || !navigator.onLine) return;
+        // 1. If we are offline, don't try to call Supabase (it will error)
+        // Just refresh the screen using local data
+        if (!navigator.onLine) {
+            filterTransactions();
+            return;
+        }
+
+        if (!currentStoreId) return;
 
         const dObj = new Date(selectedDate);
         const first = new Date(dObj.getFullYear(), dObj.getMonth(), 1).toISOString().split('T')[0];
         const last = new Date(dObj.getFullYear(), dObj.getMonth() + 1, 0).toISOString().split('T')[0];
 
         try {
-            const { data, error } = await supabaseClient.from('transactions').select('*')
-                .eq('store_id', currentStoreId).gte('date', first).lte('date', last)
+            // 2. Fetch fresh data from Supabase
+            const { data, error } = await supabaseClient.from('transactions')
+                .select('*')
+                .eq('store_id', currentStoreId)
+                .gte('date', first)
+                .lte('date', last)
                 .order('created_at', { ascending: false });
             
-            if (error) throw error;
-
-            if (data) {
+            if (!error && data) {
                 currentTransactions = data;
+                // 3. Save it to local cache for next time we are offline
                 localStorage.setItem('cache_tx', JSON.stringify(data));
                 filterTransactions();
             }
         } catch(e) {
-            console.error("Sync error.");
+            console.error("Connection lost while refreshing.");
         }
     }
 
@@ -397,9 +440,16 @@
         let daily = 0, monthly = 0;
         container.innerHTML = '';
 
-        currentTransactions.forEach(item => {
+        // 1. Get items waiting to be synced from local memory
+        const queue = JSON.parse(localStorage.getItem('sync_queue')) || [];
+        
+        // 2. Combine the Offline Queue items with the Saved Database items
+        const allItems = [...queue, ...currentTransactions];
+
+        allItems.forEach(item => {
             const val = item.type === 'income' ? item.amount : -item.amount;
             monthly += val;
+            
             if (item.date === selectedDate) {
                 daily += val;
                 if (item.description.toLowerCase().includes(search) && (typeFilter === 'all' || item.type === typeFilter)) {
@@ -408,10 +458,15 @@
                     div.style.padding = '12px';
                     div.style.display = 'flex';
                     div.style.justifyContent = 'space-between';
+                    
+                    // If it's an offline item, make it look faded
                     if (item.isPending) div.style.opacity = '0.5';
 
                     div.innerHTML = `
-                        <div><strong>${item.description}</strong><span class="meta-date">${formatTime12H(item.created_at)}</span></div>
+                        <div>
+                            <strong>${item.description}</strong>
+                            ${item.isPending ? '<br><small style="color:#f59e0b"><i class="fas fa-clock"></i> Syncing...</small>' : `<span class="meta-date">${formatTime12H(item.created_at)}</span>`}
+                        </div>
                         <div style="color:${item.type==='income'?'var(--success)':'var(--danger)'};font-weight:700;">
                             ${item.type==='income'?'+':'-'}₹${item.amount.toFixed(2)}
                         </div>`;
@@ -427,27 +482,49 @@
         const amtInput = document.getElementById('amount');
         const descInput = document.getElementById('description');
         const amount = parseFloat(amtInput.value);
+        
         if (!currentStoreId || isNaN(amount)) return alert("Enter amount");
 
+        // Create the transaction object
         const tempItem = {
-            id: Date.now(),
+            id: Date.now(), // Unique temp ID
+            store_id: currentStoreId,
             amount: amount,
             type: type,
             description: descInput.value || type,
             date: selectedDate,
             created_at: new Date().toISOString(),
-            isPending: true
+            isPending: true // Keeps the "faded" look in UI
         };
+
+        // 1. Update UI Immediately (Optimistic)
         currentTransactions.unshift(tempItem);
         filterTransactions();
-        amtInput.value = ''; descInput.value = '';
+        
+        // Clear inputs
+        amtInput.value = ''; 
+        descInput.value = '';
 
+        // 2. Handle Offline Logic
+        if (!navigator.onLine) {
+            let queue = JSON.parse(localStorage.getItem('sync_queue')) || [];
+            queue.push(tempItem);
+            localStorage.setItem('sync_queue', JSON.stringify(queue));
+            return; // Stop here if offline
+        }
+
+        // 3. Handle Online Logic
         const { data, error } = await supabaseClient.from('transactions').insert([{
-            store_id: currentStoreId, amount: amount, type,
-            description: tempItem.description, date: selectedDate, created_at: tempItem.created_at
+            store_id: tempItem.store_id, 
+            amount: tempItem.amount, 
+            type: tempItem.type,
+            description: tempItem.description, 
+            date: tempItem.date, 
+            created_at: tempItem.created_at
         }]).select();
 
         if (!error) {
+            // Replace the "pending" item with the real one from DB
             currentTransactions = currentTransactions.map(t => t.id === tempItem.id ? data[0] : t);
             localStorage.setItem('cache_tx', JSON.stringify(currentTransactions));
             filterTransactions();
