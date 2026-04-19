@@ -604,6 +604,10 @@
         
         if (!currentStoreId || isNaN(amount)) return alert("Enter amount");
 
+        if (window.navigator.vibrate) {
+            window.navigator.vibrate(50); // Short pulse for success
+        }
+
         // Create the transaction object
         const tempItem = {
             id: Date.now(), // Unique temp ID
@@ -647,6 +651,14 @@
             currentTransactions = currentTransactions.map(t => t.id === tempItem.id ? data[0] : t);
             localStorage.setItem('cache_tx', JSON.stringify(currentTransactions));
             filterTransactions();
+        }
+
+        if (error) {
+            console.log("Supabase Sync Error:", error.message);
+            // Remove the "fake" item from the UI because it failed to save
+            currentTransactions = currentTransactions.filter(t => t.id !== tempItem.id);
+            filterTransactions();
+            alert("System Busy: Transaction could not be saved. Please check your connection and try again.");
         }
     }
 
